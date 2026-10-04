@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StringArt DZ — Algorithm Prototype</title>
+<style>
+:root{--ink:#1c1c1e;--ivory:#faf7f0;--teal:#0f6f6a;--accent:#d35400;--wood:#8a6d4b}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:var(--ivory);color:var(--ink)}
+header{padding:14px 18px;border-bottom:1px solid #e4ddd0;display:flex;justify-content:space-between;align-items:center}
+header b{letter-spacing:.14em}.badge{font-size:11px;background:#eee;border-radius:99px;padding:2px 10px}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:8px 0}.stepnum{color:var(--teal);font-weight:700}
+.card{background:#fff;border:1px solid #e4ddd0;border-radius:12px;padding:16px;margin:12px 0}
+label{display:block;margin:10px 0 4px;font-size:13px;color:#555}
+input[type=number],select{padding:8px;border:1px solid #ccc;border-radius:8px;width:110px}
+button{cursor:pointer;border:1px solid #bbb;background:#fff;border-radius:10px;padding:12px 16px;font-size:15px}
+button:disabled{opacity:.4;cursor:default}
+.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.bar{height:8px;background:#e4ddd0;border-radius:99px;overflow:hidden;margin-top:8px}
+.bar>div{height:100%;background:var(--teal);width:0%}
+#board{background:#fff;border-radius:12px;touch-action:none;width:100%}
+#boardWrap{overflow:hidden;border-radius:12px;border:1px solid #e4ddd0;background:#fff}
+.big{font-size:26px;font-weight:800;color:var(--teal)}
+#drop{border:2px dashed #c9bfa9;border-radius:12px;padding:28px;text-align:center;cursor:pointer}
+canvas{display:block}
+.small{font-size:12px;color:#777}
+</style>
+</head>
+<body>
+<header><b>STRINGART DZ</b><span class="badge">ALGORITHM PROTOTYPE · v1.0.0</span></header>
+<main>
+<div id="createView">
+  <h1>Turn your photo into string art.</h1>
+  <div class="card">
+    <div id="drop">1 · Upload your photo<input type="file" id="file" accept="image/*" hidden></div>
+    <p class="small" style="margin:6px 0 0">No photo handy? <button id="demoImg" type="button">Use a demo portrait instead</button> <span class="badge">DEMO</span></p>
+    <div id="cropCtl" style="display:none">
+      <label>Fit: <select id="fit"><option value="cover">cover</option><option value="contain">contain</option></select></label>
+      <label>Position X <input type="range" id="cx" min="0" max="100" value="50"></label>
+      <label>Position Y <input type="range" id="cy" min="0" max="100" value="50"></label>
+      <canvas id="cropCv" width="220" height="220" style="border-radius:8px"></canvas>
+    </div>
+    <div class="row">
+      <div>2 · Board:
+        <label style="display:inline"><input type="radio" name="shape" value="round" checked> Round</label>
+        <label style="display:inline"><input type="radio" name="shape" value="square"> Square</label>
+      </div>
+      <div>3 · Nails <input type="number" id="nails" value="180" min="100" max="300"></div>
+      <div>4 · Thread steps <input type="number" id="tsteps" value="2500" min="2000" max="6000" step="100"></div>
+      <div>Quality <select id="q"><option value="medium" selected>medium</option><option value="low">low</option><option value="high">high</option></select></div>
+      <button class="primary" id="gen">Generate</button>
+    </div>
+    <p class="small" id="stage"></p>
+    <div class="bar"><div id="pbar"></div></div>
+  </div>
+  <div class="card" id="previewCard" style="display:none">
+    <div class="row"><img id="preview" width="220" style="border-radius:8px;border:1px solid #e4ddd0">
+      <div><p id="pstats" class="small"></p><button class="accent" id="start">Start Guide →</button></div></div>
+  </div>
+</div>
+
+<div id="guideView" style="display:none">
+  <div class="row" style="justify-content:space-between">
+    <span class="small">STRINGART DZ · <span id="pid"></span></span><span class="small" id="pct">0%</span>
+  </div>
+  <h1>Step <span class="stepnum" id="cstep">0</span> / <span id="tstep">0</span></h1>
+  <div class="bar"><div id="gbar"></div></div>
+  <div id="boardWrap"><canvas id="board" width="720" height="720"></canvas></div>
+  <div class="card" id="instr"><span class="small">Connect:</span>
+    <div class="big" id="pair">—</div>
+    <div id="wrapTxt" class="small"></div>
+  </div>
+  <div class="controls">
+    <button id="prev">← Previous</button><button id="replay">↻ Replay</button><button class="primary" id="next">Next →</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="voice">🔇 Voice off</button>
+    <button class="spd" data-s="0.5">0.5×</button><button class="spd" data-s="1">1×</button><button class="spd" data-s="2">2×</button>
+    <button id="tgt">Photo guide</button>
+    <button id="zin">＋</button><button id="zout">－</button><button id="zreset">Reset view</button>
+    <button id="fs">Full screen</button>
+    <button id="back">← New pattern</button>
+  </div>
+  <p class="small" id="gstats"></p>
+</div>
+</main>
+
+<script>
+"use strict";
+/* ============ shared constants ============ */
+const BOARD=400, INSET=15, CHECKPOINT=100;
+const QUALITY={low:128,medium:192,high:256};
+let P=null, curStep=0, speed=1, voiceOn=false, showTarget=false, zoom=1, targetURL=null, targetImg=null, animating=false;
+
+/* ============ nail geometry (deterministic) ============ */
+function nailLayout(count, shape){
+  const nails=[]; const cx=200, cy=200;
+  if(shape==="round"){
+    const r=Math.min(BOARD,BOARD)/2-INSET;
+    for(let i=1;i<=count;i++){const a=-Math.PI/2+2*Math.PI*(i-1)/count;
+      nails.push({id:i,x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)});}
+  }else{
+    const side=BOARD-2*INSET, hx=cx-side/2, hy=cy-side/2, per=4*side;
+    for(let i=0;i<count;i++){const d=i*per/count;let x,y;
+      if(d<side/2){x=hx+side/2+d;y=hy;}
+      else if(d<3*side/2){x=hx+side;y=hy+(d-side/2);}
+      else if(d<5*side/2){x=hx+side-(d-3*side/2);y=hy+side;}
+      else if(d<7*side/2){x=hx;y=hy+side-(d-5*side/2);}
+      else{x=hx+(d-7*side/2);y=hy;}
+      nails.push({id:i+1,x,y});}
+  }
+  return nails;
+}
+
+/* ============ web worker: image pipeline + greedy optimizer + renderer ============ */
+const workerSrc = `
+const BOARD=400, INSET=15;
+function nailLayout(count, shape){
+  const nails=[]; const cx=200, cy=200;
+  if(shape==="round"){ const r=BOARD/2-INSET;
+    for(let i=1;i<=count;i++){const a=-Math.PI/2+2*Math.PI*(i-1)/count;
+      nails.push({id:i,x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)});} }
+  else{ const side=BOARD-2*INSET, hx=cx-side/2, hy=cy-side/2, per=4*side;
+    for(let i=0;i<count;i++){const d=i*per/count;let x,y;
+      if(d<side/2){x=hx+side/2+d;y=hy;}
+      else if(d<3*side/2){x=hx+side;y=hy+(d-side/2);}
+      else if(d<5*side/2){x=hx+side-(d-3*side/2);y=hy+side;}
+      else if(d<7*side/2){x=hx;y=hy+side-(d-5*side/2);}
+      else{x=hx+(d-7*side/2);y=hy;}
+      nails.push({id:i+1,x,y});} }
+  return nails;
+}
+function processImage(data,w,h,S){
+  const g=new Float32Array(S*S);
+  const sx=w/S, sy=h/S;
+  for(let y=0;y<S;y++)for(let x=0;x<S;x++){
+    const px=Math.min(w-1,Math.floor(x*sx)), py=Math.min(h-1,Math.floor(y*sy));
+    const o=(py*w+px)*4;
+    g[y*S+x]=(0.299*data[o]+0.587*data[o+1]+0.114*data[o+2])/255;
+  }
+  const srt=Array.from(g).sort((a,b)=>a-b);
+  const lo=srt[Math.floor(srt.length*0.02)], hi=srt[Math.floor(srt.length*0.98)], rng=Math.max(hi-lo,1e-6);
+  for(let i=0;i<g.length;i++) g[i]=Math.min(1,Math.max(0,(g[i]-lo)/rng));
+  const dark=new Float32Array(S*S);
+  for(let y=0;y<S;y++)for(let x=0;x<S;x++){let s=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)
+      s+=g[Math.min(S-1,Math.max(0,y+dy))*S+Math.min(S-1,Math.max(0,x+dx))];
+    dark[y*S+x]=1-s/9;}
+  return dark;
+}
+function raster(x1,y1,x2,y2,S){
+  const len=Math.hypot(x2-x1,y2-y1), n=Math.max(1,Math.floor(len));
+  const out=new Uint32Array(n);
+  for(let i=0;i<n;i++){const t=n===1?0:i/(n-1);
+    out[i]=Math.round(y1+(y2-y1)*t)*S+Math.round(x1+(x2-x1)*t);}
+  return out;
+}
+self.onmessage=e=>{
+  const {imageData,shape,nailCount,steps,alpha,quality}=e.data;
+  const S={low:128,medium:192,high:256}[quality];
+  post({type:"stage",stage:"Preparing image…"});
+  const target=processImage(imageData.data,imageData.width,imageData.height,S);
+  post({type:"stage",stage:"Generating nail geometry…"});
+  const nails=nailLayout(nailCount,shape);
+  post({type:"stage",stage:"Testing thread paths…"});
+  const N=nails.length, px=nails.map(n=>({x:n.x/BOARD*(S-1),y:n.y/BOARD*(S-1)}));
+  const segIdx=[], segLen=[];
+  for(let a=0;a<N;a++){segIdx[a]=[];segLen[a]=[];
+    for(let b=0;b<N;b++){
+      if(a===b){segIdx[a][b]=new Uint32Array(0);segLen[a][b]=0;continue;}
+      segIdx[a][b]=raster(px[a].x,px[a].y,px[b].x,px[b].y,S);
+      segLen[a][b]=Math.hypot(px[b].x-px[a].x,px[b].y-px[a].y);}}
+  const rendered=new Float32Array(S*S), seq=[]; let cur=0;
+  const minJump=Math.max(2,S*0.02), REVPEN=0.35;
+  for(let step=0;step<steps;step++){
+    let best=-1,bestScore=-Infinity;
+    for(let b=0;b<N;b++){
+      if(b===cur||segLen[cur][b]<minJump)continue;
+      const idx=segIdx[cur][b]; let s=0;
+      for(let i=0;i<idx.length;i++){const r=target[idx[i]]-rendered[idx[i]]; if(r>0)s+=r;}
+      let score=s/idx.length;
+      if(seq.length&&b===seq[seq.length-1].from)score*=REVPEN;
+      if(score>bestScore){bestScore=score;best=b;}
+    }
+    if(best<0||bestScore<=1e-9)break;
+    seq.push({step:step+1,from:cur+1,to:best+1});
+    const idx=segIdx[cur][best];
+    for(let i=0;i<idx.length;i++)rendered[idx[i]]=Math.min(1,rendered[idx[i]]+alpha*(1-rendered[idx[i]]));
+    cur=best;
+    if(step%20===0)post({type:"progress",completedSteps:step+1,totalSteps:steps});
+  }
+  post({type:"stage",stage:"Rendering preview…"});
+  // reproduce result independently via renderSequence
+  const canvas=new Float32Array(S*S);
+  for(const s of seq){
+    const a=px[s.from-1],b=px[s.to-1],idx=raster(a.x,a.y,b.x,b.y,S);
+    for(let i=0;i<idx.length;i++)canvas[idx[i]]=Math.min(1,canvas[idx[i]]+alpha*(1-canvas[idx[i]]));
+  }
+  let ok=true; for(let i=0;i<canvas.length;i++) if(Math.abs(canvas[i]-rendered[i])>1e-7){ok=false;break;}
+  let err=0; for(let i=0;i<canvas.length;i++){const d=target[i]-canvas[i];err+=d*d;}
+  const preview=new ImageData(S,S);
+  for(let i=0;i<canvas.length;i++){const g=Math.round((1-canvas[i])*255);
+    preview.data[i*4]=g;preview.data[i*4+1]=g;preview.data[i*4+2]=g;preview.data[i*4+3]=255;}
+  const tgt=new ImageData(S,S);
+  for(let i=0;i<target.length;i++){const g=Math.round((1-target[i])*255);
+    tgt.data[i*4]=g;tgt.data[i*4+1]=g;tgt.data[i*4+2]=g;tgt.data[i*4+3]=255;}
+  // thread estimate from actual sequence
+  let units=0; for(const s of seq){const a=nails[s.from-1],b=nails[s.to-1];
+    units+=Math.hypot(b.x-a.x,b.y-a.y);}
+  const mm=units/BOARD*400*1.10;
+  post({type:"complete",pattern:{id:"DEMO-"+Date.now().toString(36).toUpperCase(),
+    algorithmVersion:"1.0.0",board:{shape,widthMm:400,heightMm:400},
+    nails:{count:N,positions:nails},settings:{threadSteps:steps,lineOpacity:alpha,minimumJump:minJump,allowRepeatedNail:true,reversalPenalty:REVPEN},
+    sequence:seq,image:{sourceWidth:imageData.width,sourceHeight:imageData.height,processedSize:S},
+    metrics:{finalError:err/canvas.length,estimatedThreadLengthMm:Math.round(mm),
+      estimatedThreadLengthM:Math.round(mm/100)/10}},preview,target:tgt,renderCheck:ok});
+};
+function post(m){self.postMessage(m);}
+`;
+const worker = new Worker(URL.createObjectURL(new Blob([workerSrc],{type:"text/javascript"})));
+worker.onerror=e=>{document.getElementById("stage").textContent="Worker error: "+(e.message||e.type)+
+  " — if opened from file://, try a local server or the demo button first.";
+ document.getElementById("gen").disabled=false;};
+
+/* ============ upload + crop ============ */
+let img=null, imgData=null;
+const drop=document.getElementById("drop"), file=document.getElementById("file"),
+      cropCv=document.getElementById("cropCv"), cropCtl=document.getElementById("cropCtl");
+drop.onclick=()=>file.click();
+
+document.getElementById("demoImg").onclick=()=>{
+  const S=512,c=document.createElement("canvas");c.width=c.height=S;const x=c.getContext("2d");
+  x.fillStyle="#ebebeb";x.fillRect(0,0,S,S);
+  x.fillStyle="#1a1a1a";x.beginPath();x.ellipse(S/2,0.44*S,0.34*S,0.30*S,0,0,7);x.fill();
+  x.fillStyle="#474747";x.beginPath();x.ellipse(S/2,0.52*S,0.30*S,0.38*S,0,0,7);x.fill();
+  x.fillStyle="#0d0d0d";
+  for(const ex of [S/2-0.11*S,S/2+0.11*S]){x.beginPath();x.arc(ex,0.50*S,0.045*S,0,7);x.fill();}
+  x.fillStyle="#8c8c8c";x.beginPath();x.ellipse(S/2,0.63*S,0.05*S,0.03*S,0,0,7);x.fill();
+  imgData=x.getImageData(0,0,S,S);
+  const t=document.createElement("canvas");t.width=t.height=220;
+  t.getContext("2d").drawImage(c,0,0,220,220);
+  document.getElementById("cropCtl").style.display="block";
+  document.getElementById("cropCv").getContext("2d").drawImage(t,0,0);
+  document.getElementById("stage").textContent="Demo portrait loaded (DEMO mode — not a customer pattern).";
+};
+
+file.onchange=()=>file.files[0]&&loadFile(file.files[0]);
+function loadFile(f){const url=URL.createObjectURL(f);const im=new Image();
+  im.onload=()=>{img=im;cropCtl.style.display="block";drawCrop();URL.revokeObjectURL(url);};im.src=url;}
+function drawCrop(){
+  if(!img)return;
+  const S=512,c=document.createElement("canvas");c.width=c.height=S;const x=c.getContext("2d");
+  const fit=document.getElementById("fit").value;
+  const cx=+document.getElementById("cx").value/100, cy=+document.getElementById("cy").value/100;
+  const sc=fit==="cover"?Math.max(S/img.width,S/img.height):Math.min(S/img.width,S/img.height);
+  const w=img.width*sc,h=img.height*sc;
+  x.drawImage(img,cx*(S-w),cy*(S-h),w,h);
+  imgData=x.getImageData(0,0,S,S);
+  const g=cropCv.getContext("2d");g.clearRect(0,0,220,220);g.drawImage(c,0,0,220,220);
+}
+["fit","cx","cy"].forEach(id=>document.getElementById(id).oninput=drawCrop);
+
+/* ============ generation ============ */
+document.getElementById("gen").onclick=()=>{
+  if(!imgData){alert("Upload a photo first.");return;}
+  const btn=document.getElementById("gen");btn.disabled=true;
+  document.getElementById("previewCard").style.display="none";
+  worker.postMessage({imageData:imgData,
+    shape:document.querySelector("input[name=shape]:checked").value,
+    nailCount:+document.getElementById("nails").value,
+    steps:+document.getElementById("tsteps").value,
+    alpha:0.05, quality:document.getElementById("q").value});
+};
+worker.onmessage=e=>{
+  const m=e.data, st=document.getElementById("stage");
+  if(m.type==="stage")st.textContent=m.stage;
+  if(m.type==="progress")document.getElementById("pbar").style.width=(m.completedSteps/m.totalSteps*100)+"%";
+  if(m.type==="complete"){
+    P=m.pattern;
+    if(!m.renderCheck)st.textContent="WARNING: render reproduction mismatch";
+    const c=document.createElement("canvas");c.width=m.preview.width;c.height=m.preview.height;
+    c.getContext("2d").putImageData(m.preview,0,0);
+    document.getElementById("preview").src=c.toDataURL();
+    const t=document.createElement("canvas");t.width=m.target.width;t.height=m.target.height;
+    t.getContext("2d").putImageData(m.target,0,0);targetURL=t.toDataURL();targetImg=new Image();targetImg.src=targetURL;
+    document.getElementById("pstats").textContent=
+      `${P.nails.count} nails · ${P.sequence.length} thread steps · ~${Math.round(P.metrics.estimatedThreadLengthM)} m thread · final error ${P.metrics.finalError.toFixed(4)} · render-check ${m.renderCheck?"PASS":"FAIL"}`;
+    document.getElementById("previewCard").style.display="block";
+    document.getElementById("gen").disabled=false;
+    localStorage.setItem("pattern:"+P.id,JSON.stringify(P));
+  }
+};
+
+/* ============ visual guide ============ */
+const board=document.getElementById("board"), bctx=board.getContext("2d");
+document.getElementById("start").onclick=()=>{
+  if(!P)return;
+  document.getElementById("createView").style.display="none";
+  document.getElementById("guideView").style.display="block";
+  document.getElementById("pid").textContent=P.id;
+  document.getElementById("tstep").textContent=P.sequence.length;
+  document.getElementById("gstats").textContent=`Estimated thread ~${Math.round(P.metrics.estimatedThreadLengthM)} m · ${P.nails.count} nails · v${P.algorithmVersion}`;
+  curStep=0;renderUpTo(0);updateUI();
+};
+document.getElementById("back").onclick=()=>{document.getElementById("guideView").style.display="none";document.getElementById("createView").style.display="block";};
+
+function drawLine(ctx,s,accent){
+  const a=P.nails.positions[s.from-1],b=P.nails.positions[s.to-1];
+  ctx.strokeStyle=accent?"#d35400":"#1c1c1e";ctx.lineWidth=accent?3:1;
+  ctx.beginPath();ctx.moveTo(a.x*(board.width/BOARD),a.y*(board.width/BOARD));
+  ctx.lineTo(b.x*(board.width/BOARD),b.y*(board.width/BOARD));ctx.stroke();
+}
+/* deterministic render with checkpoint-restore: draw only cp..target (spec §32) */
+function renderUpTo(n,partial){
+  const W=board.width,ctx=bctx,sc=W/BOARD;
+  ctx.clearRect(0,0,W,W);
+  ctx.strokeStyle="#8a6d4b";ctx.lineWidth=3;
+  if(P.board.shape==="round"){ctx.beginPath();ctx.arc(W/2,W/2,W/2-INSET*sc,0,7);ctx.stroke();}
+  else{const m=INSET*sc;ctx.strokeRect(m,m,W-2*m,W-2*m);}
+  if(showTarget&&targetImg&&targetImg.complete){ctx.globalAlpha=0.18;ctx.drawImage(targetImg,0,0,W,W);ctx.globalAlpha=1;}
+  const cp=Math.floor(n/CHECKPOINT)*CHECKPOINT;
+  for(let i=0;i<cp;i++)drawLine(ctx,P.sequence[i]);
+  for(let i=cp;i<n;i++)drawLine(ctx,P.sequence[i]);
+  ctx.fillStyle="#c0392b";
+  for(const nail of P.nails.positions){ctx.beginPath();ctx.arc(nail.x*sc,nail.y*sc,Math.max(2,W/300),0,7);ctx.fill();}
+  const s=P.sequence[n-1];
+  if(s){
+    if(!partial)drawLine(ctx,s,true);
+    ctx.font=`bold ${Math.max(12,W/28)}px system-ui`;ctx.fillStyle="#d35400";
+    for(const nid of [s.from,s.to]){
+      const nail=P.nails.positions[nid-1];
+      ctx.beginPath();ctx.arc(nail.x*sc,nail.y*sc,Math.max(7,W/85),0,7);
+      ctx.strokeStyle="#d35400";ctx.lineWidth=3;ctx.stroke();
+      ctx.fillText(String(nid),nail.x*sc+8,nail.y*sc-8);
+    }
+  }
+}
+function updateUI(){
+  document.getElementById("cstep").textContent=curStep;
+  const pct=Math.round(curStep/P.sequence.length*100);
+  document.getElementById("pct").textContent=pct+"%";
+  document.getElementById("gbar").style.width=pct+"%";
+  const s=P.sequence[curStep-1];
+  document.getElementById("pair").textContent=s?`NAIL ${s.from} → NAIL ${s.to}`:"—";
+  document.getElementById("wrapTxt").textContent=s?`Wrap once around nail ${s.to}.`:"Board ready. Press Next to begin.";
+  document.getElementById("prev").disabled=curStep<1;
+  document.getElementById("next").disabled=curStep>=P.sequence.length;
+  board.setAttribute("aria-label",s?`Step ${curStep}. Move thread from nail ${s.from} to nail ${s.to}.`:"Empty board");
+  if(s)speak(`Step ${curStep}. Start at nail ${s.from}. Move the thread to nail ${s.to}. Wrap it once around nail ${s.to}.`);
+}
+function speak(t){if(!voiceOn||!("speechSynthesis"in window))return;
+  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.rate=speed;speechSynthesis.speak(u);}
+
+document.getElementById("next").onclick=()=>{if(curStep<P.sequence.length){curStep++;renderUpTo(curStep);updateUI();}};
+document.getElementById("prev").onclick=()=>{if(curStep>0){curStep--;renderUpTo(curStep);updateUI();}}; // §31/§32: checkpoint restore
+document.getElementById("replay").onclick=()=>{
+  const s=P.sequence[curStep-1];if(!s||animating)return;animating=true;
+  const a=P.nails.positions[s.from-1],b=P.nails.positions[s.to-1],sc=board.width/BOARD,dur=900/speed,t0=performance.now();
+  const tick=t=>{
+    const k=Math.min(1,(t-t0)/dur);
+    renderUpTo(curStep-1,true);
+    bctx.strokeStyle="#d35400";bctx.lineWidth=3;bctx.beginPath();
+    bctx.moveTo(a.x*sc,a.y*sc);bctx.lineTo(a.x*sc+(b.x-a.x)*sc*k,a.y*sc+(b.y-a.y)*sc*k);bctx.stroke();
+    if(k<1)requestAnimationFrame(tick);
+    else{animating=false;renderUpTo(curStep);flash(b);updateUI();}
+  };
+  requestAnimationFrame(tick);
+};
+function flash(n){ // wrap indication ring flash
+  const sc=board.width/BOARD,t0=performance.now();
+  const f=t=>{const k=(t-t0)/400;if(k>1){renderUpTo(curStep);return;}
+    renderUpTo(curStep,true);
+    bctx.strokeStyle="#d35400";bctx.lineWidth=4;bctx.globalAlpha=1-k;
+    bctx.beginPath();bctx.arc(n.x*sc,n.y*sc,(7+k*26)*sc*0.5,0,7);bctx.stroke();bctx.globalAlpha=1;
+    requestAnimationFrame(f);};
+  requestAnimationFrame(f);
+}
+document.getElementById("voice").onclick=e=>{voiceOn=!voiceOn;e.target.textContent=voiceOn?"🔊 Voice on":"🔇 Voice off";
+  if(!voiceOn)speechSynthesis.cancel();};
+document.querySelectorAll(".spd").forEach(b=>b.onclick=()=>{speed=+b.dataset.s;
+  document.querySelectorAll(".spd").forEach(x=>x.style.background="");b.style.background="#1c1c1e";b.style.color="#fff";});
+document.getElementById("tgt").onclick=()=>{showTarget=!showTarget;renderUpTo(curStep);};
+document.getElementById("zin").onclick=()=>{zoom=Math.min(4,zoom*1.25);board.style.width=zoom*100+"%";board.style.height="auto";};
+document.getElementById("zout").onclick=()=>{zoom=Math.max(1,zoom/1.25);board.style.width=zoom*100+"%";board.style.height="auto";};
+document.getElementById("zreset").onclick=()=>{zoom=1;board.style.width="100%";board.style.height="auto";};
+document.getElementById("fs").onclick=()=>{const w=document.getElementById("boardWrap");
+  document.fullscreenElement?document.exitFullscreen():w.requestFullscreen&&w.requestFullscreen();};
+document.addEventListener("keydown",e=>{
+  if(document.getElementById("guideView").style.display==="none")return;
+  if(e.key==="ArrowRight")document.getElementById("next").click();
+  if(e.key==="ArrowLeft")document.getElementById("prev").click();
+  if(e.key===" ")document.getElementById("replay").click();
+});
+</script>
+</body>
+</html>
